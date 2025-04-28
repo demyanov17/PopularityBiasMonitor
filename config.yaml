@@ -1,0 +1,46 @@
+processing_data:
+    input_path: "dataset_ml-1m/ratings.dat"    # Path to raw ratings file
+    output_dir: "batches"                       # Directory to store processed daily data
+    min_user_interactions: 5                    # Minimum number of user interactions to keep
+    min_item_interactions: 10                   # Minimum number of item interactions to keep
+    window_size_days: 5                         # Size of historical window (days)
+    last_days: 30                               # How many last days to process
+
+popularity_metrics:
+    metrics_output_path: "popularity_metrics.json"  # Path to save calculated popularity metrics
+    key_column: "item_id"                           # Column name to use for popularity calculations
+
+visualizer:
+    output_dir: "output_plots"              # Directory where plots will be saved
+    metrics:                                # List of metrics to visualize
+        - "APR"
+        - "APR_norm"
+        - "Avg_rank"
+        - "Avg_num_recs"
+        - "Coverage"
+        - "Gini"
+        - "Entropy"
+        - "APLT"
+    k_values:                               # Different K-values for evaluation
+        - 1
+        - 2
+        - 5
+        - 10
+
+interface:
+    dashboard_title: "Recommendation Popularity Metrics Analysis"  # Title for the dashboard
+    sidebar:
+        metric_selection_options:
+            - "APR"
+            - "APR_norm"
+            - "Avg_rank"
+            - "Avg_num_recs"
+            - "Coverage"
+            - "Gini"
+            - "Entropy"
+            - "APLT"
+        k_selection_options:
+            - 1
+            - 2
+            - 5
+            - 10
