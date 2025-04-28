@@ -1,9 +1,12 @@
+import os
+import json
 import numpy as np
 import pandas as pd
 import logging as logger
 
 
 class PopularityMetricsCalculator:
+
     def __init__(self, df_train: pd.DataFrame, key_column="group_id", ks=[1, 2, 5, 10]):
         """Calculate popularity metrics
 
@@ -20,16 +23,16 @@ class PopularityMetricsCalculator:
         self.ks = ks
 
         # Count of keys in train data
-        self.df_train_key_count = df_train.groupby(key_column)["unique_id"].count().reset_index(name="count")
+        self.df_train_key_count = df_train.groupby(key_column)["user_id"].count().reset_index(name="count")
 
-        # Number of unique_id's in train data
-        self.num_unique_id_train = df_train["unique_id"].nunique()
+        # Number of user_id's in train data
+        self.num_unique_id_train = df_train["user_id"].nunique()
 
     def _ARP(self, df_recs: pd.DataFrame, k: int, normalize: bool = False) -> float:
         """Average Recommendation Popularity"""
 
         # Keep only top K recommendations
-        df_recs = df_recs.groupby("unique_id").head(k)
+        df_recs = df_recs.groupby("user_id").head(k)
 
         # Add popularity to recommendations
         df_recs_popularity = df_recs.merge(self.df_train_key_count, on=self.key_column, how="left").fillna(0)
@@ -38,13 +41,13 @@ class PopularityMetricsCalculator:
         if normalize:
             df_recs_popularity["count"] = df_recs_popularity["count"] / self.num_unique_id_train
 
-        return df_recs_popularity.groupby("unique_id")["count"].mean().mean()
+        return df_recs_popularity.groupby("user_id")["count"].mean().mean()
 
     def _average_rank(self, df_recs: pd.DataFrame, k: int) -> float:
         """Average rank of recommendations"""
 
         # Keep only top K recommendations
-        df_recs = df_recs.groupby("unique_id").head(k)
+        df_recs = df_recs.groupby("user_id").head(k)
 
         # Sort so that most popular keys are at the top
         df_popularity = self.df_train_key_count.sort_values(by="count", ascending=False)
@@ -52,21 +55,21 @@ class PopularityMetricsCalculator:
         # Add rank column
         df_popularity["rank"] = np.arange(len(df_popularity)) + 1
 
-        return df_recs.merge(df_popularity[[self.key_column, "rank"]], on="group_id", how="inner")["rank"].mean()
+        return df_recs.merge(df_popularity[[self.key_column, "rank"]], on="item_id", how="inner")["rank"].mean()
 
     def _average_num_recs_per_user(self, df_recs: pd.DataFrame, k: int) -> float:
         """Average number of recommendations per user"""
 
         # Keep only top K recommendations
-        df_recs = df_recs.groupby("unique_id").head(k)
+        df_recs = df_recs.groupby("user_id").head(k)
 
-        return len(df_recs) / df_recs["unique_id"].nunique()
+        return len(df_recs) / df_recs["user_id"].nunique()
 
     def _coverage(self, df_recs: pd.DataFrame, k: int) -> float:
         """Coverage of items in train dataset by recommendations"""
 
         # Keep only top K recommendations
-        df_recs = df_recs.groupby("unique_id").head(k)
+        df_recs = df_recs.groupby("user_id").head(k)
 
         # Unique items in train dataset
         items_train = self.df_train_key_count[self.key_column].unique()
@@ -80,10 +83,10 @@ class PopularityMetricsCalculator:
         """Gini index of recommendations"""
 
         # Keep only top K recommendations
-        df_recs = df_recs.groupby("unique_id").head(k)
+        df_recs = df_recs.groupby("user_id").head(k)
 
         # Calculate counts for all keys
-        df_key_count = df_recs.groupby(self.key_column)["unique_id"].count().reset_index(name="count")
+        df_key_count = df_recs.groupby(self.key_column)["user_id"].count().reset_index(name="count")
 
         # Get key probabilities and sort in ascending order
         key_probs_sorted = np.sort(np.asarray(df_key_count["count"] / len(df_recs)))
@@ -100,10 +103,10 @@ class PopularityMetricsCalculator:
         """Entropy of recommendations"""
 
         # Keep only top recommendations
-        df_recs = df_recs.groupby("unique_id").head(k)
+        df_recs = df_recs.groupby("user_id").head(k)
 
         # Calculate counts for all keys
-        df_key_count = df_recs.groupby(self.key_column)["unique_id"].count().reset_index(name="count")
+        df_key_count = df_recs.groupby(self.key_column)["user_id"].count().reset_index(name="count")
 
         # Get key probabilities
         key_probs = np.asarray(df_key_count["count"] / len(df_recs))
@@ -120,21 +123,21 @@ class PopularityMetricsCalculator:
         tail_items = self.df_train_key_count.sort_values(by="count").head(num_tail_items)[self.key_column]
 
         # Keep only top recommendations
-        df_recs = df_recs.groupby("unique_id").head(k)
+        df_recs = df_recs.groupby("user_id").head(k)
 
         # Count number of recommendations per user
-        df_recs_count = df_recs.groupby("unique_id")[self.key_column].count().reset_index(name="count")
+        df_recs_count = df_recs.groupby("user_id")[self.key_column].count().reset_index(name="count")
 
         # Count number of tail recommendations per user
         df_tail_recs_count = (
             df_recs[df_recs[self.key_column].isin(tail_items)]
-            .groupby("unique_id")[self.key_column]
+            .groupby("user_id")[self.key_column]
             .count()
             .reset_index(name="tail_count")
         )
 
         # Single dataframe with all and tail recommendations count
-        df_recs_count = df_recs_count.merge(df_tail_recs_count, on="unique_id", how="left").fillna(0)
+        df_recs_count = df_recs_count.merge(df_tail_recs_count, on="user_id", how="left").fillna(0)
 
         return sum(df_recs_count["tail_count"] / df_recs_count["count"]) / len(df_recs_count)
 
@@ -164,3 +167,41 @@ class PopularityMetricsCalculator:
         ):
             logger.info(f"Popularity_metrics:\n{df_popularity_metrics}")
         return df_popularity_metrics
+
+def process_folders(base_dir: str, output_json_path: str):
+    # Dictionary to store metrics for each folder
+    all_metrics = {}
+
+    # Iterate over all date folders
+    for folder in sorted(os.listdir(base_dir)):
+        folder_path = os.path.join(base_dir, folder)
+        training_data_path = os.path.join(folder_path, 'training_data.csv')
+
+        if os.path.isdir(folder_path) and os.path.exists(training_data_path):
+            print(f"Обработка папки: {folder}")
+
+            # Read training data
+            df_train = pd.read_csv(training_data_path)
+
+            # Initialize the popularity metrics calculator
+            popularity_calculator = PopularityMetricsCalculator(df_train, key_column="item_id")
+
+            # Read recommendations
+            recommendations_path = os.path.join(folder_path, 'recommendations.csv')
+            if os.path.exists(recommendations_path):
+                df_recs = pd.read_csv(recommendations_path)
+
+                # Calculate metrics
+                metrics_df = popularity_calculator.calculate(df_recs)
+
+                # Save metrics to the dictionary
+                all_metrics[folder] = metrics_df.to_dict(orient='records')
+
+    # Save all metrics to a JSON file
+    with open(output_json_path, 'w') as f:
+        json.dump(all_metrics, f, indent=4)
+
+if __name__ == "__main__":
+    base_dir = 'batches'  # Specify the path to the folders with data
+    output_json_path = 'popularity_metrics.json'  # Specify the path to save the metrics JSON file
+    process_folders(base_dir, output_json_path)
