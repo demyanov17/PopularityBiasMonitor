@@ -77,7 +77,6 @@ class DataProcessor:
         self.clean_data()
         self.filter_data()
         self.binarize_interactions()
-        return self.ratings
 
     def split_by_days(self, output_dir: str, window_size_days: int = 5, last_days: int = 30):
         """
@@ -120,9 +119,3 @@ class DataProcessor:
 
             # Move to the next day
             current_date += timedelta(days=1)
-
-
-if __name__ == "__main__":
-    processor = DataProcessor()
-    interactions_df = processor.process()
-    processor.split_by_days(output_dir="batches")

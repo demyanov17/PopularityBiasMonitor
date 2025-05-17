@@ -3,11 +3,13 @@ import json
 import numpy as np
 import pandas as pd
 import logging as logger
+from processing_data import DataProcessor
+from model import RecommendationGenerator
 
 
 class PopularityMetricsCalculator:
 
-    def __init__(self, df_train: pd.DataFrame, key_column="group_id", ks=[1, 2, 5, 10]):
+    def __init__(self, key_column="item_id", ks=[1, 2, 5, 10]):
         """Calculate popularity metrics
 
         Information:
@@ -22,11 +24,6 @@ class PopularityMetricsCalculator:
         # Calculate metrics for these top K
         self.ks = ks
 
-        # Count of keys in train data
-        self.df_train_key_count = df_train.groupby(key_column)["user_id"].count().reset_index(name="count")
-
-        # Number of user_id's in train data
-        self.num_unique_id_train = df_train["user_id"].nunique()
 
     def _ARP(self, df_recs: pd.DataFrame, k: int, normalize: bool = False) -> float:
         """Average Recommendation Popularity"""
@@ -168,40 +165,49 @@ class PopularityMetricsCalculator:
             logger.info(f"Popularity_metrics:\n{df_popularity_metrics}")
         return df_popularity_metrics
 
-def process_folders(base_dir: str, output_json_path: str):
-    # Dictionary to store metrics for each folder
-    all_metrics = {}
+    def compute_on_batches(self, base_dir: str, output_json_path: str):
+        # Dictionary to store metrics for each folder
+        all_metrics = {}
 
-    # Iterate over all date folders
-    for folder in sorted(os.listdir(base_dir)):
-        folder_path = os.path.join(base_dir, folder)
-        training_data_path = os.path.join(folder_path, 'training_data.csv')
+        # Processing input intercations
+        # PopularityBiasMetrics --> DataProcessor
+        processor = DataProcessor()
+        interactions_df = processor.process()
+        processor.split_by_days(output_dir="batches")
 
-        if os.path.isdir(folder_path) and os.path.exists(training_data_path):
-            print(f"Обработка папки: {folder}")
+        # Iterate over all date folders
+        for folder in sorted(os.listdir(base_dir)):
+            folder_path = os.path.join(base_dir, folder)
+            training_data_path = os.path.join(folder_path, 'training_data.csv')
 
-            # Read training data
-            df_train = pd.read_csv(training_data_path)
+            if os.path.isdir(folder_path) and os.path.exists(training_data_path):
+                print(f"Обработка папки: {folder}")
 
-            # Initialize the popularity metrics calculator
-            popularity_calculator = PopularityMetricsCalculator(df_train, key_column="item_id")
+                # Read training data
+                df_train = pd.read_csv(training_data_path)
 
-            # Read recommendations
-            recommendations_path = os.path.join(folder_path, 'recommendations.csv')
-            if os.path.exists(recommendations_path):
+                # Count of keys in train data
+                self.df_train_key_count = df_train.groupby(self.key_column)["user_id"].count().reset_index(name="count")
+
+                # Number of user_id's in train data
+                self.num_unique_id_train = df_train["user_id"].nunique()
+
+                # Read recommendations
+                recommendations_path = os.path.join(folder_path, 'recommendations.csv')
+                
+                if not os.path.exists(recommendations_path):
+                    generator = RecommendationGenerator(data_dir=folder_path)
+                    generator.generate_recommendations()
                 df_recs = pd.read_csv(recommendations_path)
 
                 # Calculate metrics
-                metrics_df = popularity_calculator.calculate(df_recs)
+                metrics_df = self.calculate(df_recs)
 
                 # Save metrics to the dictionary
                 all_metrics[folder] = metrics_df.to_dict(orient='records')
+        print("===================================================================")
+        print("Обработка данных и формирование рекомендаций завершены.")
 
-    # Save all metrics to a JSON file
-    with open(output_json_path, 'w') as f:
-        json.dump(all_metrics, f, indent=4)
-
-if __name__ == "__main__":
-    base_dir = 'batches'  # Specify the path to the folders with data
-    output_json_path = 'popularity_metrics.json'  # Specify the path to save the metrics JSON file
-    process_folders(base_dir, output_json_path)
+        # Save all metrics to a JSON file
+        with open(output_json_path, 'w') as f:
+            json.dump(all_metrics, f, indent=4)

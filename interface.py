@@ -16,7 +16,8 @@ class Board_Interface:
             json_data (dict): Data loaded from a JSON file.
         """
         self.json_data = json_data
-        self.plotter = Visualizer(json_data)  # Используем класс для построения графиков
+        self.plotter = Visualizer(self.json_data)
+        Visualizer(json_data).plot_all_metrics()
 
     def run(self):
         """Run the Streamlit application"""
@@ -98,13 +99,17 @@ class Board_Interface:
         st.markdown(f"- **Энтропия**: {summary['Entropy']}")
 
 
-if __name__ == "__main__":
-    import sys
+@st.cache_resource
+def get_dashboard():
 
     # Load data from JSON
     with open("popularity_metrics.json", "r") as f:
         json_data = json.load(f)
+    return Board_Interface(json_data)
+
+
+if __name__ == "__main__":
 
     # Launch the dashboard
-    dashboard = Board_Interface(json_data)
+    dashboard = get_dashboard()
     dashboard.run()

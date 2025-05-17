@@ -2,6 +2,7 @@ import os
 import json
 import pandas as pd
 import matplotlib.pyplot as plt
+from popularity_metrics import PopularityMetricsCalculator
 
 
 class Visualizer:
@@ -66,13 +67,19 @@ class Visualizer:
         plt.tight_layout()
 
         # Save the plot as an SVG file for high quality
-        plt.savefig(f"{self.output_dir}/{metric_name}_k{k}.svg", format="svg", dpi=300)
+        plt.savefig(f"{self.output_dir}/{metric_name}_k{k}.pdf", format="pdf", dpi=300)
         plt.close()
 
     def plot_all_metrics(self):
         """
         Generate plots for all metrics and all k values.
         """
+        base_dir = 'batches' # Specify the path to the folders with data
+        output_json_path = 'popularity_metrics.json' # Specify the path to save the metrics JSON file
+
+        popularity_calculator = PopularityMetricsCalculator()
+        popularity_calculator.compute_on_batches(base_dir, output_json_path)
+        print("Подсчёт метрик завершён. Графики отображены по соответствующему URL")
 
         for metric in self.metrics:
             for k in self.k_values:
